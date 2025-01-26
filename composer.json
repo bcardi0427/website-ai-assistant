@@ -1,0 +1,14 @@
+{
+    "name": "website-ai-assistant",
+    "description": "AI-powered chat assistant for WordPress websites",
+    "type": "wordpress-plugin",
+    "require": {
+        "php": ">=7.4",
+        "algolia/algoliasearch-client-php": "^3.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Website_Ai_Assistant\\": "includes/"
+        }
+    }
+}
