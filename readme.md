@@ -16,8 +16,8 @@
 - [Website AI Assistant](#website-ai-assistant)
   - [Features](#features)
   - [Installation](#installation)
-    - [Option 1: Standard Installation (requires Composer)](#option-1-standard-installation-requires-composer)
-    - [Option 2: Package Installation (recommended for most users)](#option-2-package-installation-recommended-for-most-users)
+    - [Source Code Installation](#source-code-installation)
+    - [Packaged Installation (Recommended)](#packaged-installation-recommended)
   - [Configuration](#configuration)
     - [Required API Keys](#required-api-keys)
     - [Settings](#settings)
@@ -50,20 +50,23 @@
 
 ## Installation
 
-### Option 1: Standard Installation (requires Composer)
-1. Clone or download the source code
-2. Run `composer install` in the plugin directory to install dependencies
-3. Upload the plugin to WordPress Admin → Plugins → Add New → Upload Plugin
-4. Activate the plugin through the 'Plugins' menu in WordPress
-5. Configure your API keys in the plugin settings
+There are two ways to install the plugin:
 
-### Option 2: Package Installation (recommended for most users)
-1. Download the packaged plugin zip file from the releases page (includes vendor files)
-2. Go to WordPress Admin → Plugins → Add New → Upload Plugin
-3. Activate the plugin through the 'Plugins' menu in WordPress
+### Source Code Installation
+If you download or clone the source code from GitHub:
+1. You'll need to run `composer install` in the plugin directory to install required dependencies
+2. Upload the plugin directory to WordPress
+3. Activate the plugin through the 'Plugins' menu
 4. Configure your API keys in the plugin settings
 
-The packaged version includes all required dependencies in the vendor directory, making it ready to use without additional steps. Choose this option if you don't want to run Composer manually.
+### Packaged Installation (Recommended)
+A pre-packaged version is available that includes all required vendor files:
+1. Download the packaged plugin zip file from the releases page
+2. Go to WordPress Admin → Plugins → Add New → Upload Plugin
+3. Activate the plugin through the 'Plugins' menu
+4. Configure your API keys in the plugin settings
+
+Note: The packaged version includes all necessary vendor files, so you don't need to run composer manually.
 
 ## Configuration
 
