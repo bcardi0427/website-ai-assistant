@@ -17,3 +17,6 @@ wp-content/plugins/hello.php
 *.swp
 *.swo
 .DS_Store
+
+# Package files
+*.zip
