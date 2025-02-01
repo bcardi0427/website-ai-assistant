@@ -3,11 +3,11 @@ declare(strict_types=1);
 
 /**
  * Plugin Name: Website AI Assistant
- * Plugin URI: https://github.com/bcardi0427/website-ai-assistant/
+ * Plugin URI:
  * Description: An AI-powered chat assistant for WordPress websites using Google's Gemini API
- * Version: 2.2.5
+ * Version: 3.0.0
  * Author: Gerald Haygood
- * Author URI: https://github.com/bcardi0427/website-ai-assistant/
+ * Author URI:
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: website-ai-assistant
@@ -46,6 +46,8 @@ spl_autoload_register(function ($class) {
     // Map namespace parts to directories
     if (strpos($file, 'Admin/') === 0) {
         $file = WAA_PLUGIN_DIR . 'admin/class-' . strtolower(str_replace('Admin/', '', $file)) . '.php';
+    } elseif (strpos($file, 'Models/') === 0) {
+        $file = WAA_PLUGIN_DIR . 'includes/models/class-' . strtolower(str_replace('Models/', '', $file)) . '.php';
     } else {
         $file = WAA_PLUGIN_DIR . 'includes/class-' . strtolower($file) . '.php';
     }
@@ -68,20 +70,9 @@ if (!class_exists('Website_Ai_Assistant\Deactivator')) {
 register_activation_hook(__FILE__, ['Website_Ai_Assistant\Activator', 'activate']);
 register_deactivation_hook(__FILE__, ['Website_Ai_Assistant\Deactivator', 'deactivate']);
 
-// Add after the define statements
-function waa_debug_log($message): void {
-    $options = get_option('waa_options', []);
-    if (empty($options['enable_debug'])) {
-        return;
-    }
-    
-    $log_file = WP_CONTENT_DIR . '/debug.log';
-    file_put_contents(
-        $log_file, 
-        date('[Y-m-d H:i:s] ') . "Website AI Assistant: " . $message . "\n", 
-        FILE_APPEND
-    );
-}
+// Load Debug_Logger first since it's used by functions.php
+require_once WAA_PLUGIN_DIR . 'includes/class-debug-logger.php';
+require_once WAA_PLUGIN_DIR . 'includes/functions.php';
 
 /**
  * Main plugin class
@@ -101,11 +92,16 @@ final class Website_AI_Assistant {
             $admin_settings = new Admin\Admin_Settings();
         }
 
-        // Initialize chat handler
-        new Chat_Handler();
+        try {
+            // Initialize chat handler
+            new Chat_Handler();
 
-        // Initialize lead handler
-        new Lead_Handler();
+            // Initialize lead handler
+            new Lead_Handler();
+        } catch (\Exception $e) {
+            waa_debug_log('Error initializing handlers: ' . $e->getMessage());
+            // Continue plugin initialization despite Algolia error
+        }
 
         // Add actions
         add_action('plugins_loaded', [$this, 'load_plugin_textdomain']);
@@ -119,14 +115,25 @@ final class Website_AI_Assistant {
         }
         return self::$instance;
     }
-
-    private function load_dependencies(): void {
-        // Load admin classes
-        require_once WAA_PLUGIN_DIR . 'admin/class-admin-settings.php';
-        // Load service classes
-        require_once WAA_PLUGIN_DIR . 'includes/class-algolia-service.php';
-        require_once WAA_PLUGIN_DIR . 'includes/class-chat-handler.php';
-        // Load lead handler
+private function load_dependencies(): void {
+    // Core utilities
+    require_once WAA_PLUGIN_DIR . 'includes/class-debug-logger.php';
+    
+    // Admin classes
+    require_once WAA_PLUGIN_DIR . 'admin/class-admin-settings.php';
+    
+    // Model classes
+    require_once WAA_PLUGIN_DIR . 'includes/models/class-base-model-service.php';
+    require_once WAA_PLUGIN_DIR . 'includes/models/class-openai-service.php';
+    require_once WAA_PLUGIN_DIR . 'includes/models/class-gemini-service.php';
+    require_once WAA_PLUGIN_DIR . 'includes/models/class-deepseek-service.php';
+    
+    // Service classes
+    require_once WAA_PLUGIN_DIR . 'includes/class-algolia-service.php';
+    require_once WAA_PLUGIN_DIR . 'includes/class-chat-handler.php';
+    
+    // Lead handler
+    require_once WAA_PLUGIN_DIR . 'includes/class-lead-handler.php';
         require_once WAA_PLUGIN_DIR . 'includes/class-lead-handler.php';
     }
 

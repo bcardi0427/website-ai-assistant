@@ -1,14 +1,19 @@
 {
-    "name": "website-ai-assistant",
-    "description": "AI-powered chat assistant for WordPress websites",
+    "name": "website-ai/website-ai-assistant",
+    "description": "Website AI Assistant Plugin",
     "type": "wordpress-plugin",
     "require": {
-        "php": ">=7.4",
-        "algolia/algoliasearch-client-php": "^3.0"
+        "algolia/algoliasearch-client-php": "^3.3",
+        "composer/installers": "^1.0"
     },
     "autoload": {
         "psr-4": {
             "Website_Ai_Assistant\\": "includes/"
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "composer/installers": true
         }
     }
 }

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Algolia Integration Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            line-height: 1.6;
+        }
+        .note {
+            background: #f0f0f0;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .error {
+            color: red;
+            background: #fff0f0;
+            padding: 10px;
+            margin: 10px 0;
+            display: none;
+        }
+        .success {
+            color: green;
+            background: #f0fff0;
+            padding: 10px;
+            margin: 10px 0;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Algolia Integration Test</h1>
+    
+    <div class="note">
+        <h3>Important Notes:</h3>
+        <ul>
+            <li>This test will attempt to initialize the Algolia service and perform a test search</li>
+            <li>Results will be logged to WordPress debug log (typically in wp-content/debug.log)</li>
+            <li>Check the logs for detailed information about the connection and search process</li>
+        </ul>
+    </div>
+
+    <div id="result"></div>
+
+    <script>
+        const resultDiv = document.getElementById('result');
+        
+        // Make an AJAX request to the test PHP file
+        fetch('algolia-test.php')
+            .then(response => response.text())
+            .then(result => {
+                if (result.includes('Fatal error') || result.includes('Warning') || result.includes('Notice')) {
+                    resultDiv.innerHTML = `<div class="error">⚠️ Test encountered errors. Please check the PHP error log for details.</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="success">✓ Test completed. Check the WordPress debug log for detailed results.</div>`;
+                }
+                resultDiv.innerHTML += `<pre>${result}</pre>`;
+            })
+            .catch(error => {
+                resultDiv.innerHTML = `<div class="error">⚠️ Error running test: ${error.message}</div>`;
+            });
+    </script>
+</body>
+</html>

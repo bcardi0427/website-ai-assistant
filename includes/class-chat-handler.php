@@ -11,34 +11,48 @@ class Chat_Handler {
     private $conversation;
     private $search_results = [];
     private $algolia_service;
+    private $lead_handler;
+    private $logger;
 
     public function __construct() {
+        $this->logger = Debug_Logger::get_instance()->set_context('Chat');
+        $this->lead_handler = new Lead_Handler();
+        
         // Get plugin options
         $options = get_option('waa_options', []);
-        $this->gemini_api_key = $options['gemini_api_key'] ?? '';
+        $this->logger->info('Chat Handler options:', [
+            'search_provider' => $options['search_provider'] ?? 'not set',
+            'has_google_key' => !empty($options['google_search_api_key']),
+            'has_search_engine_id' => !empty($options['search_engine_id']),
+            'has_algolia_app_id' => !empty($options['algolia_app_id']),
+            'has_algolia_search_key' => !empty($options['algolia_search_key'])
+        ]);
+
+        // Initialize based on selected provider
+        $this->search_provider = $options['search_provider'] ?? 'google';
         $this->search_api_key = $options['google_search_api_key'] ?? '';
         $this->search_engine_id = $options['search_engine_id'] ?? '';
-        $this->search_provider = $options['search_provider'] ?? 'google';
         $this->system_message = ($options['system_message'] ?? '') . "\n\n" .
             "Please format your responses in HTML. For links, use: " .
             "<a href='URL' target='_blank' rel='noopener noreferrer'>TITLE</a>";
         $this->max_history = $options['max_history'] ?? 10;
 
-        // Log initialization settings
-        waa_debug_log('Chat Handler initialized with:');
-        waa_debug_log('- Search Provider: ' . $this->search_provider);
-        waa_debug_log('- Google Search API Key Set: ' . (!empty($this->search_api_key) ? 'Yes' : 'No'));
-        waa_debug_log('- Search Engine ID Set: ' . (!empty($this->search_engine_id) ? 'Yes' : 'No'));
-        
-        // Validate Google Search settings if that's the selected provider
-        if ($this->search_provider === 'google') {
-            if (empty($this->search_api_key) || empty($this->search_engine_id)) {
-                waa_debug_log('WARNING: Google Search selected but credentials are missing');
-            }
-        }
-
-        // Lazy initialize Algolia service when needed
+        // Initialize credentials
         $this->algolia_service = null;
+        $this->validate_search_settings();
+
+        // Log initialization settings
+        $this->logger->section('INITIALIZATION');
+        $this->logger->info('Search settings:', [
+            'provider' => $this->search_provider,
+            'google_key_set' => !empty($this->search_api_key),
+            'engine_id_set' => !empty($this->search_engine_id)
+        ]);
+
+        if ($this->search_provider === 'algolia') {
+            $this->algolia_service = new Algolia_Service();
+            $this->logger->info('Algolia service initialized');
+        }
 
         // Add AJAX handlers
         add_action('wp_ajax_waa_chat_message', [$this, 'handle_chat_message']);
@@ -47,82 +61,100 @@ class Chat_Handler {
         add_action('wp_ajax_nopriv_waa_clear_history', [$this, 'clear_chat_history']);
     }
 
+    private function validate_search_settings(): void {
+        if ($this->search_provider === 'google') {
+            if (empty($this->search_api_key) || empty($this->search_engine_id)) {
+                $this->logger->error('Google Search credentials missing');
+            }
+        } elseif ($this->search_provider === 'algolia') {
+            $options = get_option('waa_options', []);
+            if (empty($options['algolia_app_id']) || empty($options['algolia_search_key'])) {
+                $this->logger->error('Algolia credentials missing');
+            }
+        }
+    }
+
     private function get_search_results(string $query): string {
         if ($this->search_provider === 'algolia') {
+            // Validate Algolia credentials
+            $options = get_option('waa_options', []);
+            if (empty($options['algolia_app_id']) || empty($options['algolia_search_key'])) {
+                $this->logger->error('Algolia credentials missing');
+                return '';
+            }
+
             // Initialize Algolia service if not already done
             if (!$this->algolia_service) {
                 $this->algolia_service = new Algolia_Service();
             }
 
-            // Use Algolia search
+            $this->logger->info('Searching with Algolia:', ['query' => $query]);
             $this->search_results = $this->algolia_service->get_search_results($query);
             
             if (empty($this->search_results)) {
+                $this->logger->info('No Algolia results found');
                 return "No relevant content found on this website. Please respond with: 'I apologize, but I'm specifically designed to help with questions about this website's content.'";
             }
+
+            $this->logger->info('Algolia search complete', ['results_count' => count($this->search_results)]);
         } else {
-            // Use Google search (existing functionality)
+            // Use Google search
             if (empty($this->search_api_key) || empty($this->search_engine_id)) {
-                waa_debug_log('Google Search: Missing API key or Search Engine ID');
+                $this->logger->error('Google Search credentials missing');
                 return '';
             }
 
             try {
-                waa_debug_log('Google Search: Searching for query: ' . $query);
+                $this->logger->info('Searching with Google:', ['query' => $query]);
                 $url = add_query_arg([
                     'key' => $this->search_api_key,
                     'cx' => $this->search_engine_id,
                     'q' => $query,
-                    'num' => 5 // Number of results to return
+                    'num' => 5
                 ], 'https://www.googleapis.com/customsearch/v1');
 
                 $response = wp_remote_get($url);
-                waa_debug_log('Google Search: Raw response: ' . print_r(wp_remote_retrieve_body($response), true));
+                $this->logger->debug('Google Search raw response:', [
+                    'body' => wp_remote_retrieve_body($response)
+                ]);
                 
                 if (is_wp_error($response)) {
-                    waa_debug_log('Google Search: WP Error: ' . $response->get_error_message());
                     throw new \Exception($response->get_error_message());
                 }
 
                 $body = json_decode(wp_remote_retrieve_body($response), true);
-                waa_debug_log('Google Search: Decoded response: ' . print_r($body, true));
                 
                 if (isset($body['error'])) {
-                    waa_debug_log('Google Search: API Error: ' . $body['error']['message']);
                     throw new \Exception($body['error']['message']);
                 }
 
                 if (!isset($body['items']) || empty($body['items'])) {
-                    waa_debug_log('Google Search: No results found');
+                    $this->logger->info('No Google results found');
                     $this->search_results = [];
                     return "No relevant content found on this website. Please respond with: 'I apologize, but I'm specifically designed to help with questions about this website's content.'";
                 }
 
                 // Store search results for later use
-                $this->search_results = $body['items'];
-                waa_debug_log('Google Search: Found ' . count($this->search_results) . ' results');
-                
-                // Map Google results to match Algolia format
                 $this->search_results = array_map(function($item) {
-                    $result = [
+                    return [
                         'title' => $item['title'],
                         'snippet' => $item['snippet'],
                         'link' => $item['link']
                     ];
-                    waa_debug_log('Google Search: Formatted result: ' . print_r($result, true));
-                    return $result;
-                }, $this->search_results);
+                }, $body['items']);
+
+                $this->logger->info('Google search complete', ['results_count' => count($this->search_results)]);
             } catch (\Exception $e) {
-                waa_debug_log('Website AI Assistant Search Error: ' . $e->getMessage());
+                $this->logger->exception($e, 'Google search error');
                 return '';
             }
         }
             
-        // Format the context with the search results, regardless of provider
+        // Format the context with the search results
         $context = "Here are relevant articles from our website. Provide your response in HTML format. " .
                    "For links, use: <a href='URL' target='_blank' rel='noopener noreferrer'>TITLE</a>\n\n";
 
-        waa_debug_log('Formatting context with ' . count($this->search_results) . ' search results');
+        $this->logger->debug('Building context', ['results_count' => count($this->search_results)]);
         
         foreach ($this->search_results as $index => $item) {
             $article_context = "Article {$index}:\n";
@@ -131,17 +163,20 @@ class Chat_Handler {
             $article_context .= "URL: {$item['link']}\n\n";
             
             $context .= $article_context;
-            waa_debug_log('Added article to context: ' . print_r($item, true));
+            $this->logger->debug('Added article', [
+                'index' => $index,
+                'title' => $item['title']
+            ]);
         }
 
-        waa_debug_log('Final context length: ' . strlen($context));
+        $this->logger->debug('Context built', ['length' => strlen($context)]);
         return $context;
     }
 
     public function handle_chat_message(): void {
         check_ajax_referer('waa_chat_nonce', 'nonce');
 
-        waa_debug_log("Chat Handler: Processing message");
+        $this->logger->info('Processing message');
 
         $message = sanitize_textarea_field($_POST['message'] ?? '');
         $session_id = sanitize_text_field($_POST['session_id'] ?? '');
@@ -150,17 +185,54 @@ class Chat_Handler {
             wp_send_json_error(['message' => __('Message cannot be empty.', 'website-ai-assistant')]);
         }
 
-        if (empty($this->gemini_api_key)) {
-            waa_debug_log("Chat Handler: Gemini API key not configured");
-            wp_send_json_error(['message' => __('Gemini API key is not configured.', 'website-ai-assistant')]);
+        $options = get_option('waa_options', []);
+        $provider = $options['ai_provider'] ?? 'gemini';
+        
+        $this->logger->info('AI provider settings:', [
+            'provider' => $provider,
+            'available_options' => array_keys($options),
+            'has_model' => isset($options[$provider . '_model']),
+            'model' => $options[$provider . '_model'] ?? 'not set',
+            'has_key' => isset($options[$provider . '_api_key']),
+            'all_settings' => $options
+        ]);
+        
+        // Validate API key based on provider
+        $api_key = $options[$provider . '_api_key'] ?? '';
+        if (empty($api_key)) {
+            $this->logger->error($provider . ' API key not configured');
+            wp_send_json_error(['message' => __($provider . ' API key is not configured.', 'website-ai-assistant')]);
         }
 
         try {
-            // Initialize conversation
-            $this->conversation = new Conversation($session_id, $this->max_history);
-
-            // Get search results for context
-            $search_context = $this->get_search_results($message);
+            try {
+                // Initialize conversation
+                $this->conversation = new Conversation($session_id, $this->max_history);
+                $this->logger->debug('Conversation initialized:', [
+                    'session_id' => $session_id,
+                    'max_history' => $this->max_history
+                ]);
+                
+                // Get search results for context
+                $this->logger->debug('Getting search results for:', [
+                    'query' => $message,
+                    'search_provider' => $this->search_provider
+                ]);
+                
+                $search_context = $this->get_search_results($message);
+                
+                $this->logger->debug('Search results retrieved:', [
+                    'has_results' => !empty($search_context),
+                    'context_length' => strlen($search_context)
+                ]);
+                
+            } catch (\Exception $e) {
+                $this->logger->error('Setup error:', [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+                throw $e;
+            }
 
             // Add system message with specific instructions
             $system_message = $this->system_message . "\n\n" .
@@ -180,51 +252,52 @@ class Chat_Handler {
             // Add user message
             $this->conversation->add_message('user', $message);
 
-            // Prepare the API request
-            $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=' . $this->gemini_api_key;
+            // Get the appropriate service based on provider
+            switch ($provider) {
+                case 'openai':
+                    $service = new \Website_Ai_Assistant\Models\OpenAI_Service($api_key);
+                    break;
+                case 'gemini':
+                    $service = new \Website_Ai_Assistant\Models\Gemini_Service($api_key);
+                    break;
+                case 'deepseek':
+                    $endpoint = $options['deepseek_endpoint'] ?? \Website_Ai_Assistant\Models\Deepseek_Service::API_ENDPOINT;
+                    $service = new \Website_Ai_Assistant\Models\Deepseek_Service($api_key, $endpoint);
+                    break;
+                default:
+                    throw new \Exception(__('Invalid AI provider', 'website-ai-assistant'));
+            }
 
-            $request_body = [
-                'contents' => $this->conversation->get_messages(),
-                'generationConfig' => [
-                    'temperature' => 0.7,
-                    'topK' => 40,
-                    'topP' => 0.95,
-                    'maxOutputTokens' => 1024,
-                ],
-            ];
+            // Set the model for the service
+            $model = $options[$provider . '_model'] ?? '';
+            if (empty($model)) {
+                throw new \Exception(__('No model selected for ' . $provider, 'website-ai-assistant'));
+            }
+            $service->set_model($model);
 
-            waa_debug_log("Chat Handler: Sending request to Gemini API");
-            waa_debug_log("Request body: " . print_r($request_body, true));
-
-            $response = wp_remote_post($url, [
-                'headers' => [
-                    'Content-Type' => 'application/json',
-                ],
-                'body' => json_encode($request_body),
-                'timeout' => 15,
+            $this->logger->debug('Using AI provider:', [
+                'provider' => $provider,
+                'model' => $model
             ]);
 
-            if (is_wp_error($response)) {
-                throw new \Exception($response->get_error_message());
-            }
-
-            $response_code = wp_remote_retrieve_response_code($response);
-            $response_body = wp_remote_retrieve_body($response);
+            // Generate response using the selected service
+            $this->logger->debug('Generating AI response with:', [
+                'provider' => $provider,
+                'model' => $model,
+                'messages_count' => count($this->conversation->get_messages())
+            ]);
             
-            waa_debug_log("Chat Handler: Response code: {$response_code}");
-            waa_debug_log("Chat Handler: Response body: {$response_body}");
-
-            $body = json_decode($response_body, true);
-            
-            if (isset($body['error'])) {
-                throw new \Exception($body['error']['message']);
+            try {
+                $ai_response = $service->generate_response($this->conversation->get_messages());
+            } catch (\Exception $e) {
+                $this->logger->error('AI service error:', [
+                    'provider' => $provider,
+                    'model' => $model,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+                throw $e;
             }
-
-            if (!isset($body['candidates'][0]['content']['parts'][0]['text'])) {
-                throw new \Exception(__('Invalid response from Gemini API', 'website-ai-assistant'));
-            }
-
-            $ai_response = $body['candidates'][0]['content']['parts'][0]['text'];
             
             // Format response with links
             $formatted_response = $this->format_response_with_links($ai_response);
@@ -232,19 +305,16 @@ class Chat_Handler {
             // Add AI response to conversation history
             $this->conversation->add_message('model', $ai_response);
             
-            waa_debug_log("Chat Handler: Success - Got response from API");
+            $this->logger->info('Successfully got API response');
             wp_send_json_success([
                 'message' => $formatted_response,
                 'hasLinks' => !empty($this->search_results)
             ]);
 
         } catch (\Exception $e) {
-            waa_debug_log("Chat Handler Error: " . $e->getMessage());
-            waa_debug_log("Stack trace: " . $e->getTraceAsString());
-            
+            $this->logger->exception($e, 'Chat handler error');
             wp_send_json_error([
                 'message' => sprintf(
-                    /* translators: %s: error message */
                     __('Error: %s', 'website-ai-assistant'),
                     $e->getMessage()
                 )
@@ -259,138 +329,14 @@ class Chat_Handler {
         if ($session_id) {
             $conversation = new Conversation($session_id);
             $conversation->clear_history();
+            $this->logger->info('Cleared chat history', ['session_id' => $session_id]);
         }
         
         wp_send_json_success();
     }
 
-    private function convert_markdown_to_html(string $markdown): string {
-        // First, normalize line endings
-        $markdown = str_replace(["\r\n", "\r"], "\n", $markdown);
-        
-        // Clean up any HTML attributes that might have slipped through
-        $markdown = preg_replace('/"?\s*target="_blank"\s*rel="noopener noreferrer"/', '', $markdown);
-        
-        // Convert bold
-        $html = preg_replace('/\*\*(.*?)\*\*/s', '<strong>$1</strong>', $markdown);
-        
-        // Convert italic
-        $html = preg_replace('/\*(.*?)\*/s', '<em>$1</em>', $html);
-        
-        // Convert headers (h1 to h4)
-        $html = preg_replace('/####\s*(.*?)\n/s', '<h4>$1</h4>', $html);
-        $html = preg_replace('/###\s*(.*?)\n/s', '<h3>$1</h3>', $html);
-        $html = preg_replace('/##\s*(.*?)\n/s', '<h2>$1</h2>', $html);
-        $html = preg_replace('/#\s*(.*?)\n/s', '<h1>$1</h1>', $html);
-
-        // Handle markdown links [text](url)
-        $html = preg_replace(
-            '/\[([^\]]+)\]\(([^\)]+)\)/',
-            '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>',
-            $html
-        );
-
-        // Handle any remaining bare URLs
-        $html = preg_replace_callback(
-            '/(?<![\(\[])(https?:\/\/[^\s<\)]+)/',
-            function($matches) {
-                $url = $matches[1];
-                $post_id = url_to_postid($url);
-                if ($post_id) {
-                    $title = get_the_title($post_id);
-                    return '<a href="' . esc_url($url) . '" target="_blank" rel="noopener noreferrer">' . esc_html($title) . '</a>';
-                }
-                return '<a href="' . esc_url($url) . '" target="_blank" rel="noopener noreferrer">' . esc_html($url) . '</a>';
-            },
-            $html
-        );
-
-        // Split content into blocks
-        $blocks = preg_split('/\n\n+/', $html);
-        $output = [];
-
-        foreach ($blocks as $block) {
-            $lines = explode("\n", $block);
-            $first_line = trim($lines[0]);
-            
-            // Check if this block is a list
-            if (preg_match('/^(?:[-*+]|\d+\.)\s/', $first_line)) {
-                // Determine list type
-                $is_ordered = preg_match('/^\d+\./', $first_line);
-                $list_items = [];
-                $current_indent = 0;
-                $list_stack = [];
-                
-                foreach ($lines as $line) {
-                    if (trim($line) === '') continue;
-                    
-                    // Calculate indentation level
-                    $indent = strspn($line, ' ') / 2;
-                    $line = ltrim($line);
-                    
-                    // Remove list markers
-                    $line = preg_replace('/^[-*+]\s*/', '', $line);  // Unordered list
-                    $line = preg_replace('/^\d+\.\s*/', '', $line);  // Ordered list
-                    
-                    if ($indent > $current_indent) {
-                        // Start a new nested list
-                        $new_list_type = $is_ordered ? 'ol' : 'ul';
-                        $list_stack[] = "<{$new_list_type}>";
-                        $current_indent = $indent;
-                    } elseif ($indent < $current_indent) {
-                        // Close nested lists
-                        while ($indent < $current_indent) {
-                            $list_stack[] = '</li>' . array_pop($list_stack);
-                            $current_indent--;
-                        }
-                    }
-                    
-                    $list_items[] = "<li>{$line}";
-                }
-                
-                // Close any remaining lists
-                while (!empty($list_stack)) {
-                    $list_items[] = '</li>' . array_pop($list_stack);
-                }
-                
-                $list_type = $is_ordered ? 'ol' : 'ul';
-                $output[] = "<{$list_type}>" . implode('</li>', $list_items) . "</{$list_type}>";
-            }
-            // Check if this block is a code block
-            elseif (preg_match('/^```(.*?)```$/s', $block, $matches)) {
-                $code = trim(preg_replace('/^```|```$/s', '', $matches[0]));
-                $output[] = "<pre><code>{$code}</code></pre>";
-            }
-            // Regular paragraph
-            else {
-                $block = trim($block);
-                if (!empty($block)) {
-                    // Don't wrap already-wrapped content in <p> tags
-                    if (!preg_match('/^<[a-z].*>.*<\/[a-z].*>$/s', $block)) {
-                        $output[] = "<p>{$block}</p>";
-                    } else {
-                        $output[] = $block;
-                    }
-                }
-            }
-        }
-
-        // Join blocks with appropriate spacing
-        $html = implode("\n", $output);
-        
-        // Convert inline code
-        $html = preg_replace('/`([^`]+)`/', '<code>$1</code>', $html);
-        
-        // Remove any "Related Articles" section that might be added
-        $message_content = implode("\n", $output);
-        $message_content = preg_replace('/��\s*Related Articles:?.*$/s', '', $message_content);
-        $message_content = preg_replace('/Related Articles:?.*$/s', '', $message_content);
-
-        return $message_content;
-    }
-
     private function format_response_with_links(string $response): string {
-        waa_debug_log('Formatting response with links. Raw response: ' . $response);
+        $this->logger->debug('Formatting response with links');
         
         // Since response is already in HTML, just clean it up
         $response = wp_kses($response, [
@@ -420,7 +366,7 @@ class Chat_Handler {
             $response
         );
         
-        waa_debug_log('Formatted response: ' . $response);
+        $this->logger->debug('Response formatting complete');
         return $response;
     }
-} 
+}

@@ -1,107 +1,196 @@
 <?php
 namespace Website_Ai_Assistant;
 
+/**
+ * Algolia search service integration
+ */
 class Algolia_Service {
-    private $client;
-    private $index_name;
+    private $client = null;
+    private $index_name = null;
+    private $logger;
 
     public function __construct() {
-        $options = get_option('waa_options', []);
+        $this->logger = Debug_Logger::get_instance()->set_context('Algolia');
+        
+        $options = \get_option('waa_options', []);
+        
+        // Log all Algolia-related options
+        $this->logger->info('Algolia settings from database:', [
+            'all_options' => $options,
+            'algolia_app_id' => $options['algolia_app_id'] ?? 'not set',
+            'algolia_search_key' => !empty($options['algolia_search_key']) ? 'set' : 'not set',
+            'algolia_admin_key' => !empty($options['algolia_admin_key']) ? 'set' : 'not set',
+            'algolia_index' => $options['algolia_index'] ?? 'not set'
+        ]);
+
         $app_id = $options['algolia_app_id'] ?? null;
         $search_key = $options['algolia_search_key'] ?? null;
         $admin_key = $options['algolia_admin_key'] ?? null;
+        $this->index_name = $options['algolia_index'] ?? null;
 
-        // Try to initialize Algolia client
-        if ($app_id && ($search_key || $admin_key)) {
-            try {
-                // Use the Algolia WordPress plugin's client if available
-                if (class_exists('\Algolia_Plugin_Factory')) {
-                    $plugin = \Algolia_Plugin_Factory::create();
-                    $this->client = $plugin->get_api()->get_client();
-                    $this->index_name = $this->get_primary_index_name();
-                }
-                // Fall back to direct Algolia initialization
-                elseif (class_exists('\Algolia\AlgoliaSearch\SearchClient')) {
-                    $this->client = \Algolia\AlgoliaSearch\SearchClient::create(
-                        $app_id,
-                        $admin_key ?? $search_key
-                    );
-                    // Use posts index by default
-                    $this->index_name = $app_id . '_posts';
-                }
-            } catch (\Exception $e) {
-                waa_debug_log('Algolia initialization error: ' . $e->getMessage());
+        $this->logger->section('INITIALIZING ALGOLIA');
+        
+        // Check if required classes exist
+        if (!class_exists('\Algolia\AlgoliaSearch\SearchClient')) {
+            require_once(dirname(dirname(__FILE__)) . '/vendor/autoload.php');
+        }
+
+        if (!class_exists('\Algolia\AlgoliaSearch\SearchClient')) {
+            $this->logger->error('Algolia SDK not found - please run composer require algolia/algoliasearch-client-php');
+            return;
+        }
+
+        // Verify credentials
+        if (!$app_id || !$search_key) {
+            $this->logger->error('Missing Algolia credentials', [
+                'has_app_id' => !empty($app_id),
+                'has_search_key' => !empty($search_key)
+            ]);
+            return;
+        }
+
+        try {
+            // Initialize client
+            $this->client = \Algolia\AlgoliaSearch\SearchClient::create($app_id, $search_key);
+            
+            if (!$this->client) {
+                throw new \Exception('Failed to create Algolia client');
             }
+
+            $this->logger->info('Client initialized', [
+                'app_id' => $app_id,
+                'client_class' => get_class($this->client)
+            ]);
+
+            // Verify client is working
+            $indices = $this->client->listIndices();
+            $this->logger->info('Available indices', [
+                'count' => count($indices['items'] ?? []),
+                'indices' => array_map(function($index) {
+                    return [
+                        'name' => $index['name'],
+                        'entries' => $index['entries'],
+                        'updatedAt' => $index['updatedAt']
+                    ];
+                }, $indices['items'] ?? [])
+            ]);
+
+            // Auto-detect index if not configured
+            if (empty($this->index_name) && !empty($indices['items'])) {
+                foreach ($indices['items'] as $index) {
+                    if ($index['name'] === 'website_contentsearchable_posts') {
+                        $this->index_name = $index['name'];
+                        $this->logger->info('Auto-detected index: ' . $this->index_name);
+                        break;
+                    }
+                }
+            }
+
+            if (!$this->index_name) {
+                throw new \Exception('No index configured or auto-detected');
+            }
+
+        } catch (\Exception $e) {
+            $this->logger->exception($e, 'Initialization failed');
+            $this->client = null;
         }
     }
 
-    /**
-     * Get search results from Algolia
-     *
-     * @param string $query The search query
-     * @return array Array of search results with title, snippet, and link
-     */
     public function get_search_results(string $query): array {
+        $this->logger->section('ALGOLIA SEARCH');
+        
         if (!$this->client || !$this->index_name) {
+            $this->logger->error('Client not properly initialized', [
+                'has_client' => (bool)$this->client,
+                'has_index' => (bool)$this->index_name
+            ]);
             return [];
         }
 
         try {
-            // Get the index
             $index = $this->client->initIndex($this->index_name);
-
-            // Perform the search
-            $results = $index->search($query, [
-                'hitsPerPage' => 5,
-                'attributesToRetrieve' => ['post_title', 'post_excerpt', 'permalink'],
-                'getRankingInfo' => true
+            
+            // Log the search request
+            $this->logger->info('Executing search', [
+                'query' => $query,
+                'index' => $this->index_name,
+                'timestamp' => \current_time('mysql')
             ]);
 
-            // Format results to match the expected structure from Google Search
-            $formatted_results = [];
-            foreach ($results['hits'] as $hit) {
-                // Get content from excerpt if available, otherwise use highlighted content
-                $content = $hit['post_excerpt'] ?? '';
-                if (empty($content) && isset($hit['_snippetResult']['content']['value'])) {
-                    $content = $hit['_snippetResult']['content']['value'];
-                }
-                
-                $formatted_results[] = [
-                    'title' => $hit['post_title'] ?? '',
-                    'snippet' => wp_strip_all_tags($content),
-                    'link' => $hit['permalink'] ?? ''
-                ];
+            // Perform search
+            $searchParams = [
+                'attributesToRetrieve' => ['post_title', 'post_excerpt', 'permalink', 'content'],
+                'attributesToSnippet' => ['content:50'],
+                'snippetEllipsisText' => '...',
+                'hitsPerPage' => 5
+            ];
+
+            $this->logger->debug('Search parameters', $searchParams);
+
+            // Execute search and capture raw response
+            $startTime = microtime(true);
+            $rawResults = $index->search($query, $searchParams);
+            $endTime = microtime(true);
+
+            // Log the complete raw response
+            $this->logger->section('RAW ALGOLIA RESPONSE');
+            $this->logger->debug('Search response', [
+                'execution_time' => round(($endTime - $startTime) * 1000, 2) . 'ms',
+                'query' => $rawResults['query'],
+                'total_hits' => $rawResults['nbHits'],
+                'page' => $rawResults['page'],
+                'hits_per_page' => $rawResults['hitsPerPage'],
+                'raw_response' => $rawResults
+            ]);
+
+            // If no results, log and return early
+            if (empty($rawResults['hits'])) {
+                $this->logger->info('No results found');
+                return [];
             }
+
+            // Process and format results
+            $formatted_results = [];
+            foreach ($rawResults['hits'] as $hit) {
+                $this->logger->debug('Processing hit', [
+                    'object_id' => $hit['objectID'],
+                    'raw_hit' => $hit
+                ]);
+
+                $result = [
+                    'title' => $hit['post_title'] ?? '',
+                    'snippet' => $hit['post_excerpt'] ?? ($hit['_snippetResult']['content']['value'] ?? ''),
+                    'link' => $hit['permalink'] ?? '',
+                    'relevance_score' => $hit['_rankingInfo']['score'] ?? 0
+                ];
+
+                $formatted_results[] = $result;
+            }
+
+            $this->logger->section('FORMATTED RESULTS');
+            $this->logger->info('Search complete', [
+                'total_results' => count($formatted_results),
+                'formatted_results' => $formatted_results
+            ]);
 
             return $formatted_results;
 
         } catch (\Exception $e) {
-            waa_debug_log('Algolia search error: ' . $e->getMessage());
+            $this->logger->exception($e, 'Search failed');
             return [];
         }
     }
 
-    /**
-     * Get the primary index name from the Algolia plugin settings
-     *
-     * @return string|null The index name or null if not found
-     */
-    private function get_primary_index_name(): ?string {
-        if (!class_exists('\Algolia_Plugin_Factory')) {
+    private function get_index_stats() {
+        if (!$this->client || !$this->index_name) {
             return null;
         }
 
         try {
-            $plugin = \Algolia_Plugin_Factory::create();
-            $indices = $plugin->get_indices(['searchable_posts']);
-            
-            if (empty($indices)) {
-                return null;
-            }
-
-            return reset($indices)->get_name();
+            $index = $this->client->initIndex($this->index_name);
+            return $index->getSettings();
         } catch (\Exception $e) {
-            waa_debug_log('Algolia index error: ' . $e->getMessage());
+            $this->logger->exception($e, 'Failed to get index stats');
             return null;
         }
     }

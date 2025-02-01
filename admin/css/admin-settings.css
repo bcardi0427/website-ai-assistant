@@ -1,0 +1,221 @@
+/* Model fields visibility */
+.model-field {
+    display: block;
+}
+
+.openai-field.model-field {
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+
+/* Status messages */
+.fetch-status {
+    display: inline-block;
+    margin-left: 10px;
+    font-style: italic;
+}
+
+.fetch-status.error {
+    color: #dc3232;
+}
+
+.model-fetch-status {
+    margin: 10px 0;
+    padding: 8px 12px;
+    background-color: #f8f8f8;
+    border-left: 4px solid #646970;
+}
+
+.model-fetch-status.error {
+    background-color: #fcf0f1;
+    border-color: #dc3232;
+}
+
+/* Settings Sections */
+.waa-settings-section {
+    background: #fff;
+    padding: 20px;
+    margin-bottom: 20px;
+    border: 1px solid #ccd0d4;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+/* Section Info Lists */
+.waa-section-info {
+    margin: 10px 0 15px 20px;
+    list-style-type: disc;
+    color: #666;
+}
+
+.waa-section-info li {
+    margin-bottom: 8px;
+    line-height: 1.4;
+}
+
+/* API Key Fields */
+.waa-api-key-field {
+    background: #f9f9f9;
+    padding: 15px;
+    margin: 10px 0;
+    border: 1px solid #e5e5e5;
+    border-radius: 4px;
+}
+
+.waa-api-key-field input[type="password"],
+.waa-api-key-field input[type="text"] {
+    width: 100%;
+    max-width: 400px;
+}
+
+.waa-api-key-field .description {
+    margin-top: 8px;
+    color: #666;
+    font-style: italic;
+}
+
+/* Submit Area */
+.submit-wrapper {
+    background: #f8f9fa;
+    padding: 20px;
+    margin-top: 20px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.submit-wrapper .submit {
+    margin: 0;
+    padding: 0;
+}
+
+.model-fetch-status {
+    padding: 10px 15px;
+    background: #fff;
+    border-left: 4px solid #646970;
+}
+
+.model-fetch-status.error {
+    border-color: #d63638;
+    background-color: #fcf0f1;
+}
+
+/* Section Spacing */
+.waa-settings-section + .waa-settings-section {
+    margin-top: 30px;
+}
+
+/* Provider Credentials */
+.provider-credentials {
+    margin-top: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
+.provider-credentials > div:not(:last-child) {
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #eee;
+}
+
+.waa-settings-section h2 {
+    margin-top: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+/* Form Fields */
+.form-table th {
+    padding: 20px 10px 20px 0;
+    width: 200px;
+}
+
+.waa-api-key-field {
+    margin-bottom: 15px;
+    padding: 10px;
+    border: 1px solid #eee;
+    background: #f9f9f9;
+}
+
+/* Input Fields */
+.waa-api-key-field input[type="text"],
+.waa-api-key-field input[type="password"] {
+    width: 100%;
+    max-width: 400px;
+    padding: 8px;
+}
+
+/* Descriptions */
+.waa-api-key-field .description {
+    display: block;
+    margin-top: 5px;
+    color: #666;
+    font-style: italic;
+}
+
+/* Select Fields */
+select {
+    min-width: 200px;
+}
+
+/* Provider Fields */
+.gemini-field,
+.openai-field,
+.deepseek-field,
+.google-search-field,
+.algolia-field {
+    transition: all 0.3s ease;
+}
+
+/* Status Messages */
+.model-fetch-status {
+    margin: 10px 0;
+    padding: 10px;
+    border-left: 4px solid #00a0d2;
+    background: #fff;
+}
+
+.model-fetch-status.error {
+    border-color: #dc3232;
+}
+
+/* Field Groups */
+.field-group {
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #eee;
+}
+
+.field-group:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+/* Responsive Design */
+@media screen and (max-width: 782px) {
+    .form-table th {
+        width: 100%;
+        padding-bottom: 0;
+    }
+
+    .waa-api-key-field input[type="text"],
+    .waa-api-key-field input[type="password"] {
+        max-width: 100%;
+    }
+}
+
+/* Save Button */
+.waa-form-actions {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+}
+
+/* Visual Feedback */
+.waa-api-key-field.has-value {
+    background: #f0f7ff;
+    border-color: #2271b1;
+}
