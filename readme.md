@@ -5,7 +5,7 @@
 **Plugin Name:** Website AI Assistant  
 **Plugin URI:** https://github.com/bcardi0427/website-ai-assistant/  
 **Description:** An AI-powered chat assistant for WordPress websites using Google's Gemini API  
-**Version:** 3.0.0
+**Version:** 3.2.0
 **Author:** Gerald Haygood  
 **Author URI:** https://github.com/bcardi0427/website-ai-assistant/  
 **License:** GPL v2 or later  
