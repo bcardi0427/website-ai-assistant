@@ -36,17 +36,12 @@ class Algolia_Service {
         }
 
         if (!class_exists('\Algolia\AlgoliaSearch\SearchClient')) {
-            $this->logger->error('Algolia SDK not found - please run composer require algolia/algoliasearch-client-php');
-            return;
+            throw new \Exception('Algolia SDK not found - please run composer require algolia/algoliasearch-client-php');
         }
 
         // Verify credentials
         if (!$app_id || !$search_key) {
-            $this->logger->error('Missing Algolia credentials', [
-                'has_app_id' => !empty($app_id),
-                'has_search_key' => !empty($search_key)
-            ]);
-            return;
+            throw new \Exception('Missing Algolia credentials');
         }
 
         try {
@@ -90,9 +85,15 @@ class Algolia_Service {
                 throw new \Exception('No index configured or auto-detected');
             }
 
+            // Verify index exists and is accessible
+            $index = $this->client->initIndex($this->index_name);
+            $index->getSettings();
+            $this->logger->info('Successfully verified Algolia index access');
+
         } catch (\Exception $e) {
             $this->logger->exception($e, 'Initialization failed');
             $this->client = null;
+            throw $e;
         }
     }
 

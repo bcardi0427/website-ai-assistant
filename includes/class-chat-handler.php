@@ -50,8 +50,17 @@ class Chat_Handler {
         ]);
 
         if ($this->search_provider === 'algolia') {
-            $this->algolia_service = new Algolia_Service();
-            $this->logger->info('Algolia service initialized');
+            try {
+                $this->algolia_service = new Algolia_Service();
+                $this->logger->info('Algolia service initialized successfully');
+            } catch (\Exception $e) {
+                $this->logger->error('Algolia initialization failed: ' . $e->getMessage());
+                $this->search_provider = 'google';
+                $options = get_option('waa_options', []);
+                $options['search_provider'] = 'google';
+                update_option('waa_options', $options);
+                $this->logger->info('Falling back to Google Search');
+            }
         }
 
         // Add AJAX handlers
@@ -62,15 +71,40 @@ class Chat_Handler {
     }
 
     private function validate_search_settings(): void {
-        if ($this->search_provider === 'google') {
+        $options = get_option('waa_options', []);
+        $save_options = false;
+
+        if ($this->search_provider === 'algolia') {
+            if (empty($options['algolia_app_id']) || empty($options['algolia_search_key'])) {
+                $this->logger->error('Algolia credentials missing, falling back to Google Search');
+                $this->search_provider = 'google';
+                $options['search_provider'] = 'google';
+                $save_options = true;
+                
+                // Validate Google credentials before fallback
+                if (empty($this->search_api_key) || empty($this->search_engine_id)) {
+                    $this->logger->error('Google Search credentials also missing');
+                }
+            }
+        } elseif ($this->search_provider === 'google') {
             if (empty($this->search_api_key) || empty($this->search_engine_id)) {
                 $this->logger->error('Google Search credentials missing');
+                
+                // Try Algolia if Google credentials are missing
+                if (!empty($options['algolia_app_id']) && !empty($options['algolia_search_key'])) {
+                    $this->logger->info('Switching to Algolia as fallback');
+                    $this->search_provider = 'algolia';
+                    $options['search_provider'] = 'algolia';
+                    $save_options = true;
+                }
             }
-        } elseif ($this->search_provider === 'algolia') {
-            $options = get_option('waa_options', []);
-            if (empty($options['algolia_app_id']) || empty($options['algolia_search_key'])) {
-                $this->logger->error('Algolia credentials missing');
-            }
+        }
+
+        if ($save_options) {
+            update_option('waa_options', $options);
+            $this->logger->info('Updated search provider setting:', [
+                'provider' => $this->search_provider
+            ]);
         }
     }
 
