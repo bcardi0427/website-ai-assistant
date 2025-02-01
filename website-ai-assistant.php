@@ -5,7 +5,7 @@ declare(strict_types=1);
  * Plugin Name: Website AI Assistant
  * Plugin URI:
  * Description: An AI-powered chat assistant for WordPress websites using Google's Gemini API
- * Version: 3.0.0
+ * Version: 3.2.0
  * Author: Gerald Haygood
  * Author URI:
  * License: GPL v2 or later
@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('WAA_VERSION', '2.2.5');
+define('WAA_VERSION', '3.2.0');
 define('WAA_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WAA_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('WAA_PLUGIN_BASENAME', plugin_basename(__FILE__));
