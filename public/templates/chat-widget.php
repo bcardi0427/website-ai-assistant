@@ -20,6 +20,17 @@ if (!defined('ABSPATH')) {
         </div>
 
         <!-- Add this after the chat header -->
+        <div id="waa-consent-form" class="waa-consent-form" style="display: none;">
+            <div class="waa-consent-form-inner">
+                <div class="waa-consent-message" id="waa-consent-message">
+                    <!-- Populated dynamically from options -->
+                </div>
+                <button id="waa-consent-accept" class="waa-consent-accept">
+                    <?php esc_html_e('I Agree', 'website-ai-assistant'); ?>
+                </button>
+            </div>
+        </div>
+
         <div id="waa-contact-form" class="waa-contact-form" style="display: none;">
             <div class="waa-contact-form-inner">
                 <h4><?php echo esc_html($options['lead_collection_heading'] ?? __('Please share your contact info to continue', 'website-ai-assistant')); ?></h4>

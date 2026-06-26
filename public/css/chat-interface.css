@@ -427,4 +427,47 @@
 
 .waa-contact-submit {
     flex: 2;
+}
+
+/* Consent Form Overlay */
+.waa-consent-form {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.97);
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.waa-consent-form-inner {
+    width: 100%;
+    max-width: 300px;
+    text-align: center;
+}
+
+.waa-consent-message {
+    margin-bottom: 20px;
+    color: #333;
+    font-size: 0.95em;
+    line-height: 1.4;
+}
+
+.waa-consent-accept {
+    background: #0073aa;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    width: 100%;
+}
+
+.waa-consent-accept:hover {
+    background: #006291;
 } 

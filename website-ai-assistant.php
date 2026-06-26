@@ -5,7 +5,7 @@ declare(strict_types=1);
  * Plugin Name: Website AI Assistant
  * Plugin URI:
  * Description: An AI-powered chat assistant for WordPress websites using Google's Gemini API
- * Version: 3.2.0
+ * Version: 3.3.0
  * Author: Gerald Haygood
  * Author URI:
  * License: GPL v2 or later
@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('WAA_VERSION', '3.2.0');
+define('WAA_VERSION', '3.3.0');
 define('WAA_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WAA_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('WAA_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -175,7 +175,9 @@ private function load_dependencies(): void {
             'emailRequired' => __('Please enter your email address.', 'website-ai-assistant'),
             'ajaxError' => __('An error occurred. Please try again.', 'website-ai-assistant'),
             'privacyUrl' => $options['privacy_page_url'] ?? '',
-            'privacyText' => $options['privacy_text'] ?? __('By continuing, you agree to our {privacy_policy}.', 'website-ai-assistant')
+            'privacyText' => $options['privacy_text'] ?? __('By continuing, you agree to our {privacy_policy}.', 'website-ai-assistant'),
+            'enableConsent' => !empty($options['enable_consent']),
+            'consentMessage' => $options['consent_message'] ?? __('By using this chat, you agree to our terms of service.', 'website-ai-assistant')
         ]);
     }
 

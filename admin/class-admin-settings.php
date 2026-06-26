@@ -150,6 +150,7 @@ public function register_settings(): void {
     $this->register_search_settings();    // Search configuration
     $this->register_display_settings();   // Display options
     $this->register_lead_settings();      // Lead generation settings
+    $this->register_consent_settings();   // Consent settings
 
     // Log registered settings for debugging
     waa_debug_log('Settings registered with the following data:', [
@@ -159,7 +160,8 @@ public function register_settings(): void {
             'api_credentials' => 'website-ai-assistant',
             'search_settings' => 'website-ai-assistant',
             'display_settings' => 'website-ai-assistant',
-            'lead_settings' => 'website-ai-assistant'
+            'lead_settings' => 'website-ai-assistant',
+            'consent_settings' => 'website-ai-assistant'
         ]
     ]);
 }
@@ -686,6 +688,45 @@ public function render_lead_section(): void {
         );
     }
 
+    private function register_consent_settings(): void {
+        add_settings_section(
+            'waa_consent_settings',
+            __('Consent Settings', 'website-ai-assistant'),
+            [$this, 'render_consent_section'],
+            'website-ai-assistant'
+        );
+
+        // Enable consent checkbox
+        add_settings_field(
+            'enable_consent',
+            __('Enable Consent Request', 'website-ai-assistant'),
+            [$this, 'render_checkbox_field'],
+            'website-ai-assistant',
+            'waa_consent_settings',
+            [
+                'field' => 'enable_consent',
+                'description' => __('Requires users to accept the consent message before starting a chat.', 'website-ai-assistant')
+            ]
+        );
+
+        // Consent Message textarea
+        add_settings_field(
+            'consent_message',
+            __('Consent Message', 'website-ai-assistant'),
+            [$this, 'render_textarea_field'],
+            'website-ai-assistant',
+            'waa_consent_settings',
+            [
+                'field' => 'consent_message',
+                'description' => __('The text shown to the user requesting consent.', 'website-ai-assistant')
+            ]
+        );
+    }
+
+    public function render_consent_section(): void {
+        echo '<p>' . esc_html__('Configure chatbot consent settings below:', 'website-ai-assistant') . '</p>';
+    }
+
     private function get_ai_provider_options(): array {
         return [
             'gemini' => __('Google Gemini AI', 'website-ai-assistant'),
@@ -1194,6 +1235,10 @@ public function render_lead_section(): void {
                 }
             }
         }
+
+        // Sanitize consent settings
+        $sanitized['enable_consent'] = isset($input['enable_consent']) ? 1 : 0;
+        $sanitized['consent_message'] = isset($input['consent_message']) ? sanitize_textarea_field($input['consent_message']) : '';
 
         return $sanitized;
     }

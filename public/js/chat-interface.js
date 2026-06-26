@@ -12,16 +12,29 @@ jQuery(document).ready(function($) {
     const contactName = $('#waa-contact-name');
     const contactEmail = $('#waa-contact-email');
     const contactSubmit = $('#waa-contact-submit');
+    const consentForm = $('#waa-consent-form');
+    const consentMessage = $('#waa-consent-message');
+    const consentAccept = $('#waa-consent-accept');
+    
     let isProcessing = false;
     let messageCount = 0;
     let contactInfoCollected = false;
+    let hasConsent = sessionStorage.getItem('waa_chat_consent') === 'true';
     
     // Generate a unique session ID
     const sessionId = 'waa_' + Math.random().toString(36).substr(2, 9);
 
-    // Check if we should show the contact form immediately
-    if (waaData.enableLeadCollection && waaData.leadCollectionTiming === 'immediate') {
-        contactForm.show();
+    // Consent check
+    if (waaData.enableConsent && !hasConsent) {
+        consentMessage.html(waaData.consentMessage);
+        consentForm.show();
+        chatInput.prop('disabled', true);
+        chatSend.prop('disabled', true);
+    } else {
+        // Only check/show contact form immediately if consent is not required or already given
+        if (waaData.enableLeadCollection && waaData.leadCollectionTiming === 'immediate') {
+            contactForm.show();
+        }
     }
 
     // Toggle chat interface
@@ -45,6 +58,9 @@ jQuery(document).ready(function($) {
 
     // Handle send message
     function sendMessage() {
+        if (waaData.enableConsent && !hasConsent) {
+            return;
+        }
         if (isProcessing) return;
 
         const message = chatInput.val().trim();
@@ -203,5 +219,24 @@ jQuery(document).ready(function($) {
     $('#waa-contact-skip').on('click', function() {
         contactInfoCollected = true;
         contactForm.hide();
+    });
+
+    // Handle consent acceptance
+    consentAccept.on('click', function() {
+        sessionStorage.setItem('waa_chat_consent', 'true');
+        hasConsent = true;
+        consentForm.fadeOut(200);
+        chatInput.prop('disabled', false);
+        chatSend.prop('disabled', false);
+        
+        // Focus input after consent is accepted
+        setTimeout(() => {
+            chatInput.focus();
+        }, 200);
+
+        // Show lead collection form immediately if timing calls for it
+        if (waaData.enableLeadCollection && waaData.leadCollectionTiming === 'immediate') {
+            contactForm.show();
+        }
     });
 }); 
