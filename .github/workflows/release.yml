@@ -1,0 +1,36 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build plugin zip
+        run: |
+          mkdir -p build/website-ai-assistant
+          # Copy files to build directory, excluding git/github directories and local zips
+          rsync -rc --exclude '.git' --exclude '.github' --exclude '.gitignore' --exclude 'build' --exclude '*.zip' ./ build/website-ai-assistant/
+          cd build
+          zip -r ../website-ai-assistant.zip website-ai-assistant
+          cd ..
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: website-ai-assistant.zip
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
